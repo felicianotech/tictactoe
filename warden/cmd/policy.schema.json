@@ -1,0 +1,105 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://repowarden.com/warden.schema.json",
+	"title": "Warden File",
+	"description": "The Warden file used for the CLI.",
+	"type": "object",
+	"properties": {
+		"defaultBranch": {
+			"description": "The default branch. Typically 'trunk', 'main', or 'master'.",
+			"type": "string"
+		},
+		"archived": {
+			"description": "Should archived repositories be included in the audit?",
+			"type": "boolean",
+			"default": "false"
+		},
+		"license": {
+			"description": "Describing acceptable licenses for code.",
+			"type": "object",
+			"properties": {
+				"scope": {
+					"description": "Which visibility of repos to check. 'public' or 'private' repos only, or 'all'.",
+					"type": "string",
+					"default": "public"
+				},
+				"names": {
+					"description": "An array of acceptable license slugs, as provided by GitHub.",
+					"type": "array"
+				}
+			}
+		},
+		"labels": {
+			"description": "GitHub labels available to the repository.",
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"labelStrategy": {
+			"description": "The theory behind how to audit labels. 'available' - the repo needs to have the labels listed. Any additional labels are fine. 'only' - the repo should only have the labels listed. Additional labels are not okay.",
+			"type": "string",
+			"default": "available"
+		},
+		"access": {
+			"description": "An array of accessPermissions.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"permissions": {
+						"description": "An array of userPermissions.",
+						"type": "array",
+						"properties": {
+							"items": {
+								"user": {
+									"type": "string"
+								},
+								"permission": {
+									"type": "string"
+								}
+							}
+						},
+						"required": [
+							"user",
+							"permission"
+						]
+					},
+					"strategy": {
+						"description": "The theory behind how to audit access. 'available' - the repo needs to have the access listed. Any additional permissions are fine. 'only' - the repo should only have the access listed. Additional permissions are not okay.",
+						"type": "string",
+						"default": "available"
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"codeowners": {
+			"description": "An array of codeownerPolicies.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"content": {
+						"description": "The actual text to match for a CODEOWNERS file.",
+						"type": "string"
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			}
+
+
+
+		}
+	}
+}

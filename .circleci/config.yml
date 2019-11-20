@@ -1,0 +1,184 @@
+version: 2.1
+
+orbs:
+  gor: hubci/goreleaser@2.3
+  osd: hubci/sphere@0.2
+  codecov: codecov/codecov@3.2
+
+executors:
+  linux-docker:
+    docker:
+      - image: cimg/base:2023.04
+  linux-amd64:
+    machine:
+      image: ubuntu-2204:2023.02.1
+  linux-arm64:
+    machine:
+      image: ubuntu-2004:2023.02.1
+    resource_class: arm.medium
+  macos:
+    macos:
+      xcode: 14.0.0
+  windows:
+    machine:
+      image: windows-server-2022-gui:2023.03.1
+      resource_class: windows.medium
+
+workflows:
+  main-wf:
+    jobs:
+      - test
+      - gor/release:
+          name: goreleaser-snapshot
+          version: "1.17.2"
+          go-version: "1.20.3"
+          dry-run: true
+          post-steps:
+            - persist_to_workspace:
+                root: "."
+                paths:
+                  - "dist"
+      - test-with-images:
+          requires:
+            - goreleaser-snapshot
+          matrix:
+            parameters:
+              image:
+                - linux-docker
+                - linux-amd64
+                - linux-arm64
+                - macos
+      - test-with-windows:
+          requires:
+            - goreleaser-snapshot
+      - functional-tests:
+          requires:
+            - goreleaser-snapshot
+  release-wf:
+    jobs:
+      - test:
+          filters: &semverFilters
+            branches:
+              ignore: /.*/
+            tags:
+              # SemVer regex
+              only: /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
+      - gor/release:
+          name: goreleaser-publish
+          version: "1.17.2"
+          go-version: "1.20.3"
+          filters: *semverFilters
+          post-steps:
+            - persist_to_workspace:
+                root: "."
+                paths:
+                  - "dist"
+          context: goreleaser-ctx
+      - deb-publish:
+          requires:
+            - goreleaser-publish
+          filters: *semverFilters
+
+jobs:
+  test:
+    docker:
+      - image: cimg/go:1.20.3
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v2-{{ checksum "go.sum" }}
+      - run:
+          name: "Download Dependancies"
+          command: |
+            go mod download
+            curl -sSL "https://github.com/magefile/mage/releases/download/v1.14.0/mage_1.14.0_Linux-64bit.tar.gz" | sudo tar -xz --no-same-owner -C /usr/local/bin mage
+            mage --version
+      - run:
+          name: "Run Tests & Coverage"
+          command: |
+            mkdir junit
+            mage testCI
+      - store_test_results:
+          path: junit
+      - store_artifacts:
+          path: junit/unit-tests.xml
+      - codecov/upload
+      - save_cache:
+          key: go-mod-v2-{{ checksum "go.sum" }}
+          paths:
+            - "/home/circleci/.cache/go-build"
+  test-with-images:
+    parameters:
+      image:
+        type: executor
+    executor: <<parameters.image>>
+    steps:
+      - osd/init
+      - attach_workspace:
+          at: .
+      - run: |
+          V1=""
+
+          if uname -m | grep "x86_64"; then
+            V1="_v1"
+          fi
+
+          if [ $OSD_FAMILY == "linux" ]; then
+            ./dist/warden_linux_$(dpkg --print-architecture)${V1}/warden version
+          elif [ $OSD_FAMILY == "darwin" ]; then
+            ./dist/warden_darwin_amd64${V1}/warden version
+          else
+            echo "Unsupported OS and/or architecture when testing the Warden binary." && exit 1
+          fi
+  test-with-windows:
+    executor: windows
+    steps:
+      - attach_workspace:
+          at: .
+      - run: |
+          ./dist/warden_windows_amd64_v1/warden version
+  functional-tests:
+    executor: linux-amd64
+    steps:
+      - attach_workspace:
+          at: .
+      - run: |
+          mv ./dist/warden_linux_amd64_v1/warden ~/bin/
+          echo "None yet"
+
+  deb-publish:
+    docker:
+      - image: cimg/base:2023.04
+    steps:
+      - attach_workspace:
+          at: .
+      - add_ssh_keys
+      - run: |
+          mkdir -p ~/.ssh
+          echo 'pkg.atl.revidian.net ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBE16slz1okRPeUhxIpzBCn9rHqjk51ylxEYlYXvblswcxOQ0rPyAX6N8Bd2pnsh99xce/jaX2KJHPLPCc+zAXTg= root@li361-16' >> ~/.ssh/known_hosts
+      - run: |
+          ssh pkg@pkg.atl.revidian.net "mkdir ~/incoming/warden-${CIRCLE_TAG}"
+          scp ./dist/*.deb pkg@pkg.atl.revidian.net:incoming/warden-${CIRCLE_TAG}/
+
+          # Ubuntu 20.04 Focal
+          ssh pkg@pkg.atl.revidian.net "aptly repo add ftech-ubuntu-focal ~/incoming/warden-${CIRCLE_TAG}/"
+          ssh pkg@pkg.atl.revidian.net "aptly snapshot create ftech-ubuntu-focal--warden-${CIRCLE_TAG} from repo ftech-ubuntu-focal"
+          ssh pkg@pkg.atl.revidian.net "aptly publish switch focal filesystem:ftech:/ubuntu ftech-ubuntu-focal--warden-${CIRCLE_TAG}"
+
+          # Ubuntu 22.04 Jammy
+          ssh pkg@pkg.atl.revidian.net "aptly repo add ftech-ubuntu-jammy ~/incoming/warden-${CIRCLE_TAG}/"
+          ssh pkg@pkg.atl.revidian.net "aptly snapshot create ftech-ubuntu-jammy--warden-${CIRCLE_TAG} from repo ftech-ubuntu-jammy"
+          ssh pkg@pkg.atl.revidian.net "aptly publish switch jammy filesystem:ftech:/ubuntu ftech-ubuntu-jammy--warden-${CIRCLE_TAG}"
+
+          # Ubuntu 22.10 Kinetic
+          ssh pkg@pkg.atl.revidian.net "aptly repo add ftech-ubuntu-kinetic ~/incoming/warden-${CIRCLE_TAG}/"
+          ssh pkg@pkg.atl.revidian.net "aptly snapshot create ftech-ubuntu-kinetic--warden-${CIRCLE_TAG} from repo ftech-ubuntu-kinetic"
+          ssh pkg@pkg.atl.revidian.net "aptly publish switch kinetic filesystem:ftech:/ubuntu ftech-ubuntu-kinetic--warden-${CIRCLE_TAG}"
+
+          # Ubuntu Lunar
+          ssh pkg@pkg.atl.revidian.net "aptly repo add ftech-ubuntu-lunar ~/incoming/warden-${CIRCLE_TAG}/"
+          ssh pkg@pkg.atl.revidian.net "aptly snapshot create ftech-ubuntu-lunar--warden-${CIRCLE_TAG} from repo ftech-ubuntu-lunar"
+          ssh pkg@pkg.atl.revidian.net "aptly publish switch lunar filesystem:ftech:/ubuntu ftech-ubuntu-lunar--warden-${CIRCLE_TAG}"
+
+          ssh pkg@pkg.atl.revidian.net "rm -r ~/incoming/warden-${CIRCLE_TAG}"

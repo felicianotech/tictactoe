@@ -1,0 +1,50 @@
+defaultBranch: "trunk"  # most common is main, trunk, and master
+archived: false  # include archived repos in these rules?
+license:
+  scope: "public"  # 'public', private, or all
+  names: ["mit","agpl"]  # license slug as according to GitHub
+labels:
+  - "high-priority"
+  - "bug"
+# the label strategy determines the relationship between the labels listed
+# here and how we audit
+# available - the repo needs to have the labels listed. Any additional labels are fine
+# only - the repo should only have the labels listed. Any additional labels are not okay.
+#labelStrategy: "only"
+labelStrategy: "available"
+# Access permissions allowed. The first example is a regular user and the
+# second one is a team example.
+# Regular users aren't supported yet and will be ignored.
+#   permissions can be:
+#     - read
+#     - push
+#     - maintain
+#     - admin
+access:
+  - permissions:
+      - user: felicianotech
+        permission: admin
+      - user: cloud-unpacked/tech-writers
+        permission: push
+    # The access strategy determines the relationship between the permissions listed
+    # here and how we audit
+    # available - the repo needs to have the permissions listed. Any additional
+    # permissions are fine.
+    # only - the repo should only have the permissions listed. Any additional
+    # permissions are not okay.
+    strategy: "available"
+  - permissions:
+      - user: felicianotech
+        permission: maintain
+    strategy: "only"
+    tags: [ "hugo" ]
+
+# For CODEOWNERS checks, use a pipe multistring to specify what the code owners file should be.
+# Warden will also repo if there is any syntax errors with the file
+# only .github/CODEOWNERS is supported right now
+# Since inputting tabs into YAML can be weird, use \t instead
+# This policy is affected by the `branch` flag.
+codeowners:
+  - content: |
+      *\t@CircleCI-Public/orb-publishers @CircleCI-Public/images
+    tags: [ "CircleCI-Public" ]
