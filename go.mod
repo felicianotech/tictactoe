@@ -1,4 +1,4 @@
-module github.com/repowarden/cli
+module github.com/felicianotech/tictactoe
 
 go 1.20
 
