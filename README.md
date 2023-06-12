@@ -1,4 +1,4 @@
-# Warden [![CI Status](https://circleci.com/gh/repowarden/cli.svg?style=shield)](https://app.circleci.com/pipelines/github/repowarden/cli) [![Software License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/repowarden/cli/trunk/LICENSE)
+# Tic tac toe [![CI Status](https://circleci.com/gh/repowarden/cli.svg?style=shield)](https://app.circleci.com/pipelines/github/repowarden/cli) [![Software License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/repowarden/cli/trunk/LICENSE)
 
 The RepoWarden CLI `warden` is a tool to audit your git repositories based on policy.
 Check the default branch, license, and labels across multiple repositories across multiple organizations.
